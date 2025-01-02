@@ -27,7 +27,6 @@
         <module>${project.name}-view-model</module>
         <module>${project.name}-domain</module>
         <module>${project.name}-outbound</module>
-        <module>project-name</module>
     </modules>
 
     <dependencies>

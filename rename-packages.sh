@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # Controllo degli argomenti passati (vecchio e nuovo nome del pacchetto, nome del progetto, etc.)
-if [ "$#" -ne 6 ]; then
+if [ "$#" -ne 7 ]; then
   echo "Devi fornire il vecchio e il nuovo pacchetto, il groupId, l'artifactId e la versione."
   echo "Esempio: ./rename-packages.sh com.oldpackage com.newpackage com.oldgroup my-project 1.0.0"
   exit 1
 fi
 
 # Parametri passati
-OLD_PACKAGE="com.package"
+OLD_PACKAGE="project-name"
 NEW_PACKAGE=$1
 OLD_MODULE_PART="\${project-name}"
 NEW_MODULE_PART=$2
@@ -16,51 +16,15 @@ GROUP_ID=$3
 ARTIFACT_ID=$4
 VERSION=$5
 PROJECT_NAME=$6
+OLD_COMPANY="company-name"
+NEW_COMPANY=$7
+
 
 # Rinominare la directory del modulo (solo se contiene la parte specificata)
 for DIR in $(find . -type d -name "*$OLD_MODULE_PART*"); do
   NEW_DIR=$(echo "$DIR" | sed "s/$OLD_MODULE_PART/$NEW_MODULE_PART/g")
   echo "Rinominando la directory $DIR in $NEW_DIR"
   mv "$DIR" "$NEW_DIR"
-done
-
-# Rinominare i moduli nel pom.xml principale
-sed -i "s/<module>$OLD_MODULE<\/module>/<module>$NEW_MODULE_PART<\/module>/g" pom.xml
-
-# Rinominare i moduli nei rispettivi pom.xml
-for MODULE in $(find . -type f -name "pom.xml"); do
-  sed -i "s/<artifactId>$OLD_MODULE<\/artifactId>/<artifactId>$NEW_MODULE_PART<\/artifactId>/g" "$MODULE"
-  sed -i "s/$OLD_PACKAGE/$NEW_PACKAGE/g" "$MODULE"
-done
-
-# Rinominare i package e le classi
-find . -type d -name "$OLD_PACKAGE" -exec bash -c 'mv "$0" "$(echo $0 | sed s/$OLD_PACKAGE/$NEW_PACKAGE/)"' {} \;
-find . -type f -name "*.java" -exec sed -i "s/package $OLD_PACKAGE;/package $NEW_PACKAGE;/g" {} \;
-
-# Rinominare le dipendenze nei pom.xml
-find . -type f -name "pom.xml" -exec sed -i "s/<artifactId>$OLD_MODULE<\/artifactId>/<artifactId>$NEW_MODULE<\/artifactId>/g" {} \;
-
-# Trova tutti i file .java nel progetto
-echo "Rinominando pacchetti e classi da '$OLD_PACKAGE' a '$NEW_PACKAGE'..."
-
-# Passaggio 1: Rinominare le dichiarazioni dei pacchetti nei file .java
-find . -type f -name "*.java" | while read file; do
-  # Modifica la dichiarazione del package nel file
-  sed -i '' "s/package $OLD_PACKAGE/package $NEW_PACKAGE/" "$file"
-
-  # Rinominare i file se necessario (se il nome del file include il pacchetto)
-  if [[ "$file" == *"$OLD_PACKAGE"* ]]; then
-    # Rinominare il percorso dei file
-    new_file=$(echo "$file" | sed "s/$OLD_PACKAGE/$NEW_PACKAGE/")
-    mv "$file" "$new_file"
-    echo "Rinominato $file in $new_file"
-  fi
-done
-
-# Passaggio 2: Rinominare tutte le occorrenze di classi nel codice
-find . -type f -name "*.java" | while read file; do
-  # Trova tutte le occorrenze della vecchia classe e sostituiscile con la nuova
-  sed -i '' "s/$OLD_PACKAGE/$NEW_PACKAGE/g" "$file"
 done
 
 # Modifica del pom.xml per sostituire i placeholder
@@ -75,26 +39,36 @@ find . -type f -name "pom.xml" | while read pom_file; do
   echo "Aggiornato il file $pom_file"
 done
 
-# Passaggio 2: Rinominare le dichiarazioni di pacchetto nei file .java
-echo "Rinominando pacchetti e classi da '$OLD_PACKAGE' a '$NEW_PACKAGE'..."
-
-find . -type f -name "*.java" | while read file; do
-  # Modifica la dichiarazione del package nel file
-  sed -i '' "s/package $OLD_PACKAGE/package $NEW_PACKAGE/" "$file"
-
-  # Rinominare i file se necessario (se il nome del file include il pacchetto)
-  if [[ "$file" == *"$OLD_PACKAGE"* ]]; then
-    # Rinominare il percorso dei file
-    new_file=$(echo "$file" | sed "s/$OLD_PACKAGE/$NEW_PACKAGE/")
-    mv "$file" "$new_file"
-    echo "Rinominato $file in $new_file"
-  fi
-done
-
-# Passaggio 3: Rinominare tutte le occorrenze di classi nel codice
-find . -type f -name "*.java" | while read file; do
-  # Trova tutte le occorrenze della vecchia classe e sostituiscile con la nuova
-  sed -i '' "s/$OLD_PACKAGE/$NEW_PACKAGE/g" "$file"
-done
-
 echo "Operazione completata. Pacchetti, classi e pom.xml sono stati rinominati."
+
+# ----------------------------------- #
+
+# Trova tutti i moduli Maven nel progetto
+find . -name "pom.xml" -exec dirname {} \; > modules.txt
+
+# Rinominare i pacchetti nei moduli trovati
+while read MODULE_DIR; do
+  echo "Processing module: $MODULE_DIR"
+
+  # 1. Rinominare le directory che corrispondono al vecchio pacchetto
+    echo "Rinominando directory in $MODULE_DIR..."
+    find "$MODULE_DIR/src/main/java" -type d -name "$OLD_COMPANY" -exec bash -c 'mv "$0" "${0/'$OLD_COMPANY'/'$NEW_COMPANY'}"' {} \;
+    find "$MODULE_DIR/src/main/java" -type d -name "$OLD_PACKAGE" -exec bash -c 'mv "$0" "${0/'$OLD_PACKAGE'/'$NEW_PACKAGE'}"' {} \;
+
+    # 2. Rinominare i riferimenti nei file Java
+    echo "Aggiornando i riferimenti nel codice Java..."
+    find "$MODULE_DIR/src/main/java" -type f -name "*.java" -exec sed -i "s|package $OLD_COMPANY.$OLD_PACKAGE|package $NEW_COMPANY.$NEW_PACKAGE|g" {} \;
+
+    # 3. Aggiornare i riferimenti nel file pom.xml del modulo
+    echo "Aggiornando il file pom.xml del modulo..."
+    sed -i "s|$OLD_COMPANY.$OLD_PACKAGE|$NEW_COMPANY.$NEW_PACKAGE|g" "$MODULE_DIR/pom.xml"
+
+    # 4. Se ci sono altri pom.xml nei moduli figli, aggiorna anche quelli
+    find "$MODULE_DIR" -name "pom.xml" -exec sed -i "s|$OLD_COMPANY.$OLD_PACKAGE|$NEW_COMPANY.$NEW_PACKAGE|g" {} \;
+
+done < modules.txt
+
+# Rimuovi il file temporaneo che contiene i moduli
+rm modules.txt
+
+echo "Rinominamento completato per tutti i moduli!"
